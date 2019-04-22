@@ -10,15 +10,51 @@
 
 /* setup state for simulation */
 static int setup(state_t *state) {
-  size_t num_bodies = state->num_bodies, bi;
+  size_t num_clusters = state->num_clusters, 
+         num_bodies = state->num_bodies,
+         bodies_per_cluster, ci, bi;
+  double cx, cy, ox, oy;
+  body_t *bodies, b;
 
   /* allocate memory for bodies */
-  state->bodies = malloc(num_bodies * sizeof(body_t));
+  state->bodies = calloc(num_bodies, sizeof(body_t));
   if (state->bodies == NULL) return -1;
+  bodies = state->bodies;
 
-  /* uniformally distribute bodies and assign mass */
-  for (bi = 0; bi < num_bodies; bi++) {
-    state->bodies[bi] = random_body();
+  /* distribute random bodies by cluster */
+  const double cluster_offset_scale = 
+    ((double) DIST_SCALE) / ((double) num_clusters * 10);
+  bodies_per_cluster = num_bodies / num_clusters;
+
+  for (ci = 0; ci < num_clusters; ci++) {
+    cx = ((double) DIST_SCALE) *
+         ((double) rand() / (double) RAND_MAX);
+    cy = ((double) DIST_SCALE) *
+         ((double) rand() / (double) RAND_MAX);
+
+    for (bi = ci * bodies_per_cluster;
+         bi < (ci+1) * bodies_per_cluster
+         && bi < num_bodies; bi++) {
+
+      ox = ((double) cluster_offset_scale) *
+           (((double) rand() / (double) RAND_MAX) * 2.0 - 1.0);
+      oy = ((double) cluster_offset_scale) *
+           (((double) rand() / (double) RAND_MAX) * 2.0 - 1.0);
+
+      b.x = cx + ox;
+      b.y = cy + oy;
+    
+      b.vx = 0.0; b.ax = 0.0; b.nax = 0.0;
+      b.vy = 0.0; b.ay = 0.0; b.nay = 0.0;
+
+      b.m = ((double) INIT_MASS) +
+            ((double) MASS_RANGE) *
+            (((double) rand() / (double) RAND_MAX) * 2.0 - 1.0);
+
+      bodies[bi] = b;
+
+
+    }
   }
 
   return 0;
@@ -70,12 +106,6 @@ static inline int step(state_t *state) {
   for (b1i = 0; b1i < num_bodies; b1i++) {
     b1 = &(bodies[b1i]);
 
-    // fprintf(stderr, "b: %zu\n"
-    //                 "x: %f, vx: %f, ax: %f, nax: %f\n"
-    //                 "y: %f, vy: %f, ay: %f, nay: %f\n\n",
-    //                  b1i, b1->ax, b1->vx, b1->ax, b1->nax,
-    //                  b1->y, b1->vy, b1->ay, b1->nay);
-
     /* update x components */
     b1->x = b1->x + b1->vx * dt + b1->ax * dt2;
     b1->vx = b1->vx + ((b1->nax + b1->ax) / 2.0) * dt;
@@ -85,18 +115,6 @@ static inline int step(state_t *state) {
     b1->y = b1->y + b1->vy * dt + b1->ay * dt2;
     b1->vy = b1->vy + ((b1->nay + b1->ay) / 2.0) * dt;
     b1->ay = b1->nay;
-
-    // /* update x components */
-    // tmpvx = b1->vx + dto2 * b1->ax;
-    // b1->x = b1->x + dt * tmpvx;
-    // b1->vx = tmpvx + dto2 * b1->nax;
-    // b1->ax = b1->nax;
-
-    // /* update y components */
-    // tmpvy = b1->vy + dto2 * b1->ay;
-    // b1->y = b1->y + dt * tmpvy;
-    // b1->vy = tmpvy + dto2 * b1->nay;
-    // b1->ay = b1->nay;
   }
 
   //fprintf(stderr, "FINISHED: updating positions!\n");
@@ -116,7 +134,8 @@ static inline void write_state(state_t *state, size_t si) {
 
   for (bi = 0; bi < state->num_bodies; bi++) {
     b = &(state->bodies[bi]);
-    fprintf(stdout, "%zu %zu %.5f %.5f\n", si, bi, b->x, b->y);
+    fprintf(stdout, "%zu %zu %f %f %f\n",
+            si, bi, b->m, b->x, b->y);
   }
 }
 
@@ -137,19 +156,25 @@ static int simulate(state_t *state) {
 }
 
 static const char *usage_msg =
-  "Usage: ./gsim <number of bodies> <number of steps>\n";
+  "Usage: ./gsim <number of clusters> <number of bodies> "
+  "<number of steps> <random seed for initialization>\n";
 
 int main(int argc, char **argv) {
   state_t *state;
 
   /* get command line arguments */
-  if (argc != NUM_ARGS) fprintf(stderr, usage_msg);
+  if (argc != NUM_ARGS) {
+    fprintf(stderr, usage_msg);
+    return -1;
+  }
 
-  state = malloc(sizeof(state_t));
+  state = calloc(1, sizeof(state_t));
   if (state == NULL) return -1;
 
+  state->num_clusters = atoi(argv[ARG_NUM_CLUSTERS]);
   state->num_bodies = atoi(argv[ARG_NUM_BODIES]);
   state->num_steps = atoi(argv[ARG_NUM_STEPS]);
+  srand(atoi(argv[ARG_RAND_SEED]));
 
   /* initialize simulation state */
   if (setup(state)) return -1;

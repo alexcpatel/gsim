@@ -4,9 +4,11 @@
 #include <unistd.h>
 #include <fstream>
 
-#define DIST_SCALE 20.0e15 // 20^15 meters
+#define DIST_SCALE 20.0e15 // meters
+#define INIT_MASS 4.0e30 // kg
 
 typedef struct {
+  double m;
   double x;
   double y;
 } pos_t;
@@ -39,9 +41,11 @@ static int setup(char *pos_path, pos_t ***positions,
 
   /* read file and fill memory */
   const double dist_divisor = 2.0 / DIST_SCALE;
-  double x, y;
+  const double mass_divisor = 6.0 / INIT_MASS;
+  double m, x, y;
   pos_t pos;
-  while (infile >> si >> bi >> x >> y) {
+  while (infile >> si >> bi >> m >> x >> y) {
+    pos.m = m * mass_divisor;
     pos.x = x * dist_divisor - 1.0;
     pos.y = y * dist_divisor - 1.0;
     ((*positions)[si])[bi] = pos;
@@ -92,24 +96,28 @@ int main(int argc, char **argv) {
     glOrtho(-ratio, ratio, -1.f, 1.f, 1.f, -1.f);
     glMatrixMode(GL_MODELVIEW);
 
-    /* set point options */
-    glHint(GL_POINT_SMOOTH_HINT, GL_NICEST);
-    glEnable(GL_POINT_SMOOTH);
-    glLoadIdentity();
-    glBlendFunc(GL_DST_ALPHA, GL_ONE_MINUS_DST_ALPHA);
-    glPointSize(8);
-    glBegin(GL_POINTS);
-    glColor3f(1.f, 1.f, 1.f);
-
     /* render body positions */
     step_positions = positions[si];
     for (bi = 0; bi < num_bodies; bi++) {
       pos = step_positions[bi];
+
+      /* set point options */
+      glHint(GL_POINT_SMOOTH_HINT, GL_NICEST);
+      glEnable(GL_POINT_SMOOTH);
+      glLoadIdentity();
+      glBlendFunc(GL_DST_ALPHA, GL_ONE_MINUS_DST_ALPHA);
+      glPointSize(pos.m);
+      glBegin(GL_POINTS);
+      glColor3f(1.f, 1.f, 1.f);
+
+      /* draw vertex */
       glVertex2f(pos.x, pos.y);
+
+      glEnd();
     }
 
     /* end opengl rendering */
-    glEnd();
+    
     glfwSwapBuffers(window);
     glfwPollEvents();
 
