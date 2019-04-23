@@ -5,8 +5,8 @@
 #include <stdio.h>
 #include <math.h>
 
-#include "body.h"
 #include "gsim.h"
+#include "quadtree.h"
 
 /* setup state for simulation */
 static int setup(state_t *state) {
@@ -41,19 +41,14 @@ static int setup(state_t *state) {
       oy = ((double) cluster_offset_scale) *
            (((double) rand() / (double) RAND_MAX) * 2.0 - 1.0);
 
-      b.x = cx + ox;
-      b.y = cy + oy;
-    
-      b.vx = 0.0; b.ax = 0.0; b.nax = 0.0;
-      b.vy = 0.0; b.ay = 0.0; b.nay = 0.0;
-
       b.m = ((double) INIT_MASS) +
             ((double) MASS_RANGE) *
             (((double) rand() / (double) RAND_MAX) * 2.0 - 1.0);
 
+      b.x = cx + ox; b.vx = 0.0; b.hvx = 0.0; b.ax = 0.0;
+      b.y = cy + oy; b.vy = 0.0; b.hvy = 0.0; b.ay = 0.0;
+
       bodies[bi] = b;
-
-
     }
   }
 
@@ -62,62 +57,63 @@ static int setup(state_t *state) {
 
 /* simulate the state for one step */
 static inline int step(state_t *state) {
-  size_t b1i, b2i, num_bodies = state->num_bodies;
-  double ax, ay, mult, denom, denom_sq;
-  body_t *bodies = state->bodies;
-  body_t *b1, *b2;
-  dist_t dist;
+  size_t bi, num_bodies = state->num_bodies;
+  body_t *bodies = state->bodies, *b;
+  quadtree_t *quadtree;
 
-  const double epsilon_sq = (SOFTENING_FACTOR) * (SOFTENING_FACTOR);
-  const double G = GRAV_CONSTANT;
-  const double dt = TIME_STEP;
-  const double dt2 = (dt*dt) / 2.0;
+  /* constant definitions for step loop */
+  static const double epsilon2 =
+    (SOFTENING_FACTOR) * (SOFTENING_FACTOR);
+  static const double G = GRAV_CONSTANT;
+  static const double dt = TIME_STEP;
+  static const double lo_quad_bound = -1.0 * DIST_SCALE;
+  static const double hi_quad_bound = 2.0  * DIST_SCALE;
 
-  /* compute forces */
-  for (b1i = 0; b1i < num_bodies; b1i++) {
-    b1 = &(bodies[b1i]);
-    
-    ax = 0.0;
-    ay = 0.0;
-
-    /* add contributions from all other bodies */
-    for (b2i = 0; b2i < num_bodies; b2i++) {
-      if (b1i == b2i) continue;
-
-      b2 = &(bodies[b2i]);
-      dist = distance(b1, b2);
-
-      denom = dist.mag*dist.mag + epsilon_sq;
-      denom_sq = denom*denom;
-      denom = (denom * denom_sq) / denom_sq;
-      mult = b2->m / denom;
-
-      ax += mult * dist.x;
-      ay += mult * dist.y;
-    }
-
-    b1->nax = G * ax;
-    b1->nay = G * ay;
-  }
-
-  //fprintf(stderr, "FINISHED: computing forces!\n");
-
-  /* update positions */
-  for (b1i = 0; b1i < num_bodies; b1i++) {
-    b1 = &(bodies[b1i]);
+  /* update positions of each body */
+  for (bi = 0; bi < num_bodies; bi++) {
+    b = &(bodies[bi]);
 
     /* update x components */
-    b1->x = b1->x + b1->vx * dt + b1->ax * dt2;
-    b1->vx = b1->vx + ((b1->nax + b1->ax) / 2.0) * dt;
-    b1->ax = b1->nax;
+    b->hvx = b->vx + 0.5 * b->ax * dt;
+    b->x = b->x + b->hvx * dt;
 
     /* update y components */
-    b1->y = b1->y + b1->vy * dt + b1->ay * dt2;
-    b1->vy = b1->vy + ((b1->nay + b1->ay) / 2.0) * dt;
-    b1->ay = b1->nay;
+    b->hvy = b->vy + 0.5 * b->ay * dt;
+    b->y = b->y + b->hvy * dt;
   }
 
-  //fprintf(stderr, "FINISHED: updating positions!\n");
+  /* build quad tree */
+  quadtree = quadtree_new(lo_quad_bound, lo_quad_bound,
+                          hi_quad_bound, hi_quad_bound);
+  if (quadtree == NULL) return -1;
+
+  for (bi = 0; bi < num_bodies; bi++) {
+    b = &(bodies[bi]);
+    if (quadtree_insert(quadtree, b->m, b->x, b->y)) return -1;
+  }
+
+  /* compute forces for each body by traversing quadtree */
+  for (bi = 0; bi < num_bodies; bi++) {
+    b = &(bodies[bi]);
+    b->ax = 0.0;
+    b->ay = 0.0;
+
+    aggregate_forces(quadtree, b, state->theta, epsilon2);
+
+    b->ax *= G;
+    b->ay *= G;
+  }
+
+  /* update velocities for next step */
+  for (bi = 0; bi < num_bodies; bi++) {
+    b = &(bodies[bi]);
+
+    /* update x component */
+    b->vx = b->hvx + 0.5 * b->ax * dt;
+
+    /* update x component */
+    b->vy = b->hvy + 0.5 * b->ay * dt;
+  }
 
   return 0;
 }
@@ -156,8 +152,9 @@ static int simulate(state_t *state) {
 }
 
 static const char *usage_msg =
-  "Usage: ./gsim <number of clusters> <number of bodies> "
-  "<number of steps> <random seed for initialization>\n";
+  "Usage: ./gsim <number of clusters> <number of bodies>\n"
+  "              <number of simulation steps> <theta for quadtree>\n"
+  "              <random seed for initialization>\n";
 
 int main(int argc, char **argv) {
   state_t *state;
@@ -174,17 +171,14 @@ int main(int argc, char **argv) {
   state->num_clusters = atoi(argv[ARG_NUM_CLUSTERS]);
   state->num_bodies = atoi(argv[ARG_NUM_BODIES]);
   state->num_steps = atoi(argv[ARG_NUM_STEPS]);
+  state->theta = atof(argv[ARG_THETA]);
   srand(atoi(argv[ARG_RAND_SEED]));
 
   /* initialize simulation state */
   if (setup(state)) return -1;
 
-  fprintf(stderr, "finished setting up!\n");
-
   /* run simulation */
   if (simulate(state)) return -1;
-
-  fprintf(stderr, "finished simulation!\n");
 
   return 0;
 }

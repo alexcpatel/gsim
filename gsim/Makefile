@@ -7,10 +7,10 @@ SDIR=src
 
 LIBS=-lm
 
-_DEPS = gsim.h body.h
+_DEPS = gsim.h quadtree.h
 DEPS = $(patsubst %,$(IDIR)/%,$(_DEPS))
 
-_OBJ = gsim.o body.o
+_OBJ = gsim.o quadtree.o
 OBJ = $(patsubst %,$(ODIR)/%,$(_OBJ))
 
 BINS = gsim
