@@ -153,7 +153,6 @@ int aggregate_forces(quadtree_t *quadtree, body_t *b,
   dmag = sqrt(dx*dx + dy*dy);
 
   if (quadtree->l/dmag < theta) {
-    fprintf(stderr, "segfault\n");
 
     /* add tree contribution */
     denom = dmag*dmag + epsilon2;

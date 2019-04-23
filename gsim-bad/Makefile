@@ -13,15 +13,15 @@ DEPS = $(patsubst %,$(IDIR)/%,$(_DEPS))
 _OBJ = gsim.o body.o
 OBJ = $(patsubst %,$(ODIR)/%,$(_OBJ))
 
-BINS = gsim
+BINS = gsim-bad
 
 $(ODIR)/%.o: $(SDIR)/%.c $(DEPS) | build_dir
 	$(CC) -c -o $@ $< $(CFLAGS)
 
 default: all
-all: clean gsim
+all: clean gsim-bad
 
-gsim: $(OBJ)
+gsim-bad: $(OBJ)
 	$(CC) -o $@ $^ $(CFLAGS) $(LIBS)
 
 .PHONY: build_dir
