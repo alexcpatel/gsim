@@ -32,10 +32,10 @@ static int setup(char *pos_path, pos_t ***positions,
 
   /* allocate memory */
   size_t si, bi;
-  *positions = (pos_t **)calloc(*num_steps, sizeof(pos_t *));
+  *positions = (pos_t **)malloc(*num_steps * sizeof(pos_t *));
   if (*positions == NULL) return -1;
   for (si = 0; si < *num_steps; si++) {
-    (*positions)[si] = (pos_t *)calloc(*num_bodies, sizeof(pos_t));
+    (*positions)[si] = (pos_t *)malloc(*num_bodies * sizeof(pos_t));
     if ((*positions)[si] == NULL) return -1;
   }
 
