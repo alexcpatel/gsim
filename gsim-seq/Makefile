@@ -13,15 +13,15 @@ DEPS = $(patsubst %,$(IDIR)/%,$(_DEPS))
 _OBJ = gsim.o quadtree.o
 OBJ = $(patsubst %,$(ODIR)/%,$(_OBJ))
 
-BINS = gsim
+BINS = gsim-seq
 
 $(ODIR)/%.o: $(SDIR)/%.c $(DEPS) | build_dir
 	$(CC) -c -o $@ $< $(CFLAGS)
 
 default: all
-all: clean gsim
+all: clean gsim-seq
 
-gsim: $(OBJ)
+gsim-seq: $(OBJ)
 	$(CC) -o $@ $^ $(CFLAGS) $(LIBS)
 
 .PHONY: build_dir
