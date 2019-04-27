@@ -1,0 +1,4 @@
+PARAMETERS ----- bodies: 1000, steps: 200, runs: 10, processes: 1
+Benchmark 1 -- Seconds: 1.376658, NPM: 6883.290000
+Benchmark 2 -- Seconds: 1.366231, NPM: 6831.155000
+Benchmark 3 -- Seconds: 1.364847, NPM: 6824.235000
