@@ -41,7 +41,7 @@ static int setup(char *pos_path, pos_t ***positions,
 
   /* read file and fill memory */
   const double dist_divisor = 2.0 / DIST_SCALE;
-  const double mass_divisor = 6.0 / INIT_MASS;
+  const double mass_divisor = 3.0 / INIT_MASS;
   double m, x, y;
   pos_t pos;
   while (infile >> si >> bi >> m >> x >> y) {
