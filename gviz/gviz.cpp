@@ -117,14 +117,13 @@ int main(int argc, char **argv) {
     }
 
     /* end opengl rendering */
-    
     glfwSwapBuffers(window);
     glfwPollEvents();
 
     /* increment step and continue */
     si++;
-    if (si >= num_steps) si = 0;
-    usleep(1000); // sleep 100 ms
+    if (si >= num_steps) break;
+    usleep(1000); // sleep 1 ms
   }
 
   glfwDestroyWindow(window);

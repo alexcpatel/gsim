@@ -7,9 +7,9 @@
 #define DIST_SCALE         20.0e15      // m
 #define INIT_MASS          4.0e30       // kg
 #define MASS_RANGE         2.0e30       // kg
-#define SOFTENING_FACTOR   1.0e10       // arbitrary small value
+#define SOFTENING_FACTOR   1.0          // arbitrary small value
 #define TIME_STEP          1.0e2        // s
-#define MAX_ACCELERATION   5.0e6        // m/s
+#define MAX_ACCELERATION   7.0e6        // m * s^-2
 
 /* command line argument constants */
 #define NUM_ARGS 6
