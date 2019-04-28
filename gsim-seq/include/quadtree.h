@@ -1,7 +1,7 @@
 #ifndef _GSIM_QUADTREE_H_
 #define _GSIM_QUADTREE_H_
 
-#include "body.h"
+#include "gsim.h"
 
 typedef struct qt {
   /* tree bounding box */

@@ -101,7 +101,12 @@ static inline int step(state_t *state) {
     aggregate_forces(quadtree, b, state->theta, epsilon2);
 
     b->ax *= G;
+    if (b->ax < -MAX_ACCELERATION) b->ax = -MAX_ACCELERATION;
+    else if (b->ax > MAX_ACCELERATION) b->ax = MAX_ACCELERATION;
+
     b->ay *= G;
+    if (b->ay < -MAX_ACCELERATION) b->ay = -MAX_ACCELERATION;
+    else if (b->ay > MAX_ACCELERATION) b->ay = MAX_ACCELERATION;
   }
 
   /* update velocities for next step */

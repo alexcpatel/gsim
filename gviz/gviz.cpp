@@ -46,8 +46,8 @@ static int setup(char *pos_path, pos_t ***positions,
   pos_t pos;
   while (infile >> si >> bi >> m >> x >> y) {
     pos.m = m * mass_divisor;
-    pos.x = x * dist_divisor - 1.0;
-    pos.y = y * dist_divisor - 1.0;
+    pos.x = (x * dist_divisor - 1.0) * 0.5;
+    pos.y = (y * dist_divisor - 1.0) * 0.5;
     ((*positions)[si])[bi] = pos;
   }
 
