@@ -35,7 +35,7 @@ static int setup(state_t *state) {
   /* distribute random bodies by cluster */
   const double cluster_offset_scale = 
     ((double) DIST_SCALE) / ((double) num_clusters * 10);
-  bodies_per_cluster = num_bodies / num_clusters;
+  bodies_per_cluster = num_bodies / num_clusters + 1;
 
   //#pragma omp parallel for schedule(static)
   for (ci = 0; ci < num_clusters; ci++) {
