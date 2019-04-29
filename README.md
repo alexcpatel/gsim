@@ -3,9 +3,9 @@ Parallel Galaxy Simulation with the Barnes-Hut Algorithm using OpenMP
 
 ## Overview
 
-The `gsim-bad` directory contains an implementation of a naive O(n^2) algorithm. 
-The `gsim-seq` directory contains a baseline sequential implementation of the algorithm.
-The `gsim-omp` directory contains a parallel implementation of the algorithm.
+* The `gsim-bad` directory contains an implementation of a naive O(n^2) algorithm. 
+* The `gsim-seq` directory contains a baseline sequential implementation of the algorithm.
+* The `gsim-omp` directory contains a parallel implementation of the algorithm.
 
 The above project directories have a Makefile (run `make` in the project directory) to build the respective projects. Run the executable with a specified output file to generate data for the visualizer.
 
