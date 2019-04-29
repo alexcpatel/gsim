@@ -83,7 +83,8 @@ static int setup(state_t *state) {
 }
 
 /* simulate the state for one step */
-static inline int step(state_t *state) {
+static inline void step(state_t *state) {
+  START_ACTIVITY(OTHER);
   size_t bi, num_bodies = state->num_bodies,
          pi, thread_cnt = state->thread_cnt;
   body_t *bodies = state->bodies;
@@ -98,8 +99,10 @@ static inline int step(state_t *state) {
   static const double dt = TIME_STEP;
   static const double lo_quad_bound = -1.0 * DIST_SCALE;
   static const double hi_quad_bound = 2.0  * DIST_SCALE;
+  FINISH_ACTIVITY(OTHER);
 
   /* update positions of each body */
+  START_ACTIVITY(UPDATE_POSITIONS);
   #pragma omp parallel for schedule(static)
   for (bi = 0; bi < num_bodies; bi++) {
     body_t *b = &(bodies[bi]);
@@ -108,8 +111,10 @@ static inline int step(state_t *state) {
     b->hvy = b->vy + 0.5 * b->ay * dt;
     b->y = b->y + b->hvy * dt;
   }
+  FINISH_ACTIVITY(UPDATE_POSITIONS);
 
   /* initialize new quadtree */
+  START_ACTIVITY(BUILD_QUADTREE);
   quadtree = quadtree_new(lo_quad_bound, lo_quad_bound,
                           hi_quad_bound, hi_quad_bound);
 
@@ -118,11 +123,15 @@ static inline int step(state_t *state) {
   for (bi = 0; bi < num_bodies; bi++) {
     quadtree_insert(quadtree, &(bodies[bi]));
   }
+  FINISH_ACTIVITY(BUILD_QUADTREE);
 
   /* traverse tree to assign costs and node approximations */
+  START_ACTIVITY(TRAVERSE_QUADTREE);
   quadtree_traverse(quadtree);
+  FINISH_ACTIVITY(TRAVERSE_QUADTREE);
 
   /* setup cost zone partitioning */
+  START_ACTIVITY(PARTITION_QUADTREE);
   W = quadtree->work;
   Wp = W / thread_cnt;
   #pragma omp parallel for schedule(static)
@@ -139,8 +148,10 @@ static inline int step(state_t *state) {
   for (pi = 0; pi < thread_cnt; pi++) {
     quadtree_partition(quadtree, &(partitions[pi]), 0);
   }
+  FINISH_ACTIVITY(PARTITION_QUADTREE);
 
   /* compute forces for each body by traversing quadtree */
+  START_ACTIVITY(COMPUTE_FORCES);
   #pragma omp parallel for schedule(static)
   for (pi = 0; pi < thread_cnt; pi++) {
     partition_t *p = &(partitions[pi]);
@@ -163,27 +174,34 @@ static inline int step(state_t *state) {
       else if (b->ay > MAX_ACCELERATION) b->ay = MAX_ACCELERATION;
     }
   }
+  FINISH_ACTIVITY(COMPUTE_FORCES);
   
   /* update velocities for next step */
+  START_ACTIVITY(UPDATE_VELOCITIES);
   #pragma omp parallel for schedule(static)
   for (bi = 0; bi < num_bodies; bi++) {
     body_t *b = &(bodies[bi]);
     b->vx = b->hvx + 0.5 * b->ax * dt;
     b->vy = b->hvy + 0.5 * b->ay * dt;
   }
+  FINISH_ACTIVITY(UPDATE_VELOCITIES);
 
+  START_ACTIVITY(FREE_QUADTREE);
   quadtree_free(quadtree);
-  return 0;
+  FINISH_ACTIVITY(FREE_QUADTREE);
 }
 
 /* writes the header line of the simulation state to stdout */
 static inline void write_header(state_t *state) {
+  START_ACTIVITY(WRITE_FILE);
   fprintf(state->output_file, "%zu %zu\n",
           state->num_bodies, state->num_steps);
+  FINISH_ACTIVITY(WRITE_FILE);
 }
 
 /* writes the current simulation state to stdout */
 static inline void write_state(state_t *state, size_t si) {
+  START_ACTIVITY(WRITE_FILE);
   size_t bi;
   body_t *b;
 
@@ -192,21 +210,20 @@ static inline void write_state(state_t *state, size_t si) {
     fprintf(state->output_file, "%zu %zu %f %f %f\n",
             si, bi, b->m, b->x, b->y);
   }
+  FINISH_ACTIVITY(WRITE_FILE);
 }
 
 /* simulate the state for a number of steps */
-static int simulate(state_t *state) {
+static void simulate(state_t *state) {
   size_t si;
-  FILE *output_file = state->output_file;
+  bool has_output_file = state->output_file != NULL;
 
-  if (output_file != NULL) write_header(state);
+  if (has_output_file) write_header(state);
   for (si = 0; si < state->num_steps; si++) {
-    if (output_file != NULL) write_state(state, si);
-    if (step(state)) return -1;
+    if (has_output_file) write_state(state, si);
+    step(state);
   }
-  if (output_file != NULL) write_state(state, state->num_steps);
-
-  return 0;
+  if (has_output_file) write_state(state, state->num_steps);
 }
 
 static const char *usage_msg =
@@ -216,6 +233,7 @@ static const char *usage_msg =
 
 int main(int argc, char **argv) {
   state_t *state;
+  START_ACTIVITY(OTHER);
 
   /* get command line arguments */
   if (argc < MIN_ARGS || argc > MAX_ARGS) {
@@ -239,14 +257,23 @@ int main(int argc, char **argv) {
                   state->thread_cnt, omp_get_max_threads());
 
   omp_set_num_threads(state->thread_cnt);
+  FINISH_ACTIVITY(OTHER);
 
   /* initialize simulation state */
+  START_ACTIVITY(SETUP);
   if (setup(state)) return -1;
+  FINISH_ACTIVITY(SETUP);
 
   /* run simulation */
-  if (simulate(state)) return -1;
+  simulate(state);
 
+  /* free and close resources */
+  START_ACTIVITY(OTHER);
   free_state(state);
   if (state->output_file != NULL) fclose(state->output_file);
+  FINISH_ACTIVITY(OTHER);
+
+  /* print monitor information */
+  PRINT_ACTIVITIES();
   return 0;
 }

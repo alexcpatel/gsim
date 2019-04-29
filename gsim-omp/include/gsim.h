@@ -12,6 +12,9 @@
 #include <math.h>
 #include <omp.h>
 
+#include "monitor.h"
+
+/* general constants for gsim */
 #define GRAV_CONSTANT      6.67408e-11  // m^3 * kg^-1 * s^-2
 #define DIST_SCALE         20.0e15      // m
 #define INIT_MASS          4.0e30       // kg
