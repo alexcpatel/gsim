@@ -21,7 +21,8 @@
 #define MAX_ACCELERATION   7.0e6        // m * s^-2
 
 /* command line argument constants */
-#define NUM_ARGS 7
+#define MIN_ARGS 7
+#define MAX_ARGS 8
 typedef enum {
   ARG_FILE_NAME = 0,
   ARG_THREAD_CNT,
@@ -29,7 +30,8 @@ typedef enum {
   ARG_NUM_BODIES,
   ARG_NUM_STEPS,
   ARG_THETA,
-  ARG_RAND_SEED
+  ARG_RAND_SEED,
+  ARG_OUT_FILE
 } arg_index_t;
 
 /* body struct definition */
@@ -61,6 +63,7 @@ typedef struct pt {
 
 /* simulation state struct definition */
 typedef struct {
+  FILE *output_file; // output file for visualizer
   int thread_cnt; // number of openmp threads
   size_t num_clusters; // number of local clusters to divide bodies into
   size_t num_bodies; // total number of bodies

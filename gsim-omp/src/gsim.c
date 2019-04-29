@@ -5,7 +5,15 @@
 static inline void free_state(state_t *state) {
   if (state != NULL) {
     free(state->bodies);
-    free();
+    int pi;
+    partition_t *partitions = state->partitions;
+    #pragma omp parallel for schedule(static)
+    for (pi = 0; pi < state->thread_cnt; pi++) {
+      partition_t *p = &(partitions[pi]);
+      free(p->pbodies);
+    }
+    free(partitions);
+    free(state);
   }
 }
 
@@ -29,33 +37,33 @@ static int setup(state_t *state) {
     ((double) DIST_SCALE) / ((double) num_clusters * 10);
   bodies_per_cluster = num_bodies / num_clusters;
 
-  #pragma omp parallel for schedule(static)
+  //#pragma omp parallel for schedule(static)
   for (ci = 0; ci < num_clusters; ci++) {
     cx = ((double) DIST_SCALE) *
          ((double) rand() / (double) RAND_MAX);
     cy = ((double) DIST_SCALE) *
          ((double) rand() / (double) RAND_MAX);
 
-    #pragma omp parallel for schedule(static)
+    //#pragma omp parallel for schedule(static)
     for (bi = ci * bodies_per_cluster;
-         bi < (ci+1) * bodies_per_cluster
-         && bi < num_bodies; bi++) {
-
-      ox = ((double) cluster_offset_scale) *
-           (((double) rand() / (double) RAND_MAX) * 2.0 - 1.0);
-      oy = ((double) cluster_offset_scale) *
-           (((double) rand() / (double) RAND_MAX) * 2.0 - 1.0);
-
-      body_t b;
-      b.m = ((double) INIT_MASS) +
-            ((double) MASS_RANGE) *
-            (((double) rand() / (double) RAND_MAX) * 2.0 - 1.0);
-
-      b.x = cx + ox; b.vx = 0.0; b.hvx = 0.0; b.ax = 0.0;
-      b.y = cy + oy; b.vy = 0.0; b.hvy = 0.0; b.ay = 0.0;
-      b.work = 1;
-
-      bodies[bi] = b;
+         bi < (ci+1) * bodies_per_cluster; bi++) {
+      if (bi < num_bodies) {
+        ox = ((double) cluster_offset_scale) *
+             (((double) rand() / (double) RAND_MAX) * 2.0 - 1.0);
+        oy = ((double) cluster_offset_scale) *
+             (((double) rand() / (double) RAND_MAX) * 2.0 - 1.0);
+  
+        body_t b;
+        b.m = ((double) INIT_MASS) +
+              ((double) MASS_RANGE) *
+              (((double) rand() / (double) RAND_MAX) * 2.0 - 1.0);
+  
+        b.x = cx + ox; b.vx = 0.0; b.hvx = 0.0; b.ax = 0.0;
+        b.y = cy + oy; b.vy = 0.0; b.hvy = 0.0; b.ay = 0.0;
+        b.work = 1;
+  
+        bodies[bi] = b;
+      }
     }
   }
 
@@ -79,7 +87,7 @@ static inline int step(state_t *state) {
   size_t bi, num_bodies = state->num_bodies,
          pi, thread_cnt = state->thread_cnt;
   body_t *bodies = state->bodies;
-  partitions_t *partitions = state->partitions;
+  partition_t *partitions = state->partitions;
   quadtree_t *quadtree;
   int W, Wp;
 
@@ -95,20 +103,15 @@ static inline int step(state_t *state) {
   #pragma omp parallel for schedule(static)
   for (bi = 0; bi < num_bodies; bi++) {
     body_t *b = &(bodies[bi]);
-
-    /* update x components */
     b->hvx = b->vx + 0.5 * b->ax * dt;
     b->x = b->x + b->hvx * dt;
-
-    /* update y components */
     b->hvy = b->vy + 0.5 * b->ay * dt;
     b->y = b->y + b->hvy * dt;
   }
 
-  /* build quad tree */
+  /* initialize new quadtree */
   quadtree = quadtree_new(lo_quad_bound, lo_quad_bound,
                           hi_quad_bound, hi_quad_bound);
-  if (quadtree == NULL) return -1;
 
   /* insert all bodies into tree */
   #pragma omp parallel for schedule(static)
@@ -126,14 +129,15 @@ static inline int step(state_t *state) {
   for (pi = 0; pi < thread_cnt; pi++) {
     partition_t *p = &(partitions[pi]);
     p->min_work = pi * Wp;
-    p->max_work = pi == thread_cnt - 1 ? W : (pi + 1) * Wp;
-    p->num_bodies = 0;
+    p->max_work = pi == thread_cnt - 1 ? W : (pi + 1) * Wp - 1;
+    if (p->max_work < p->min_work) p->max_work = p->min_work;
+    p->num_pbodies = 0;
   }
 
   /* partition tree between threads by cost zone */
   #pragma omp parallel for schedule(static)
   for (pi = 0; pi < thread_cnt; pi++) {
-    quadtree_partition(quadtree, &(partitions[pi]));
+    quadtree_partition(quadtree, &(partitions[pi]), 0);
   }
 
   /* compute forces for each body by traversing quadtree */
@@ -143,7 +147,6 @@ static inline int step(state_t *state) {
     size_t num_pbodies = p->num_pbodies;
     body_t **pbodies = p->pbodies;
 
-    #pragma omp parallel for schedule(static)
     for (bi = 0; bi < num_pbodies; bi++) {
       body_t *b = pbodies[bi];
   
@@ -165,20 +168,18 @@ static inline int step(state_t *state) {
   #pragma omp parallel for schedule(static)
   for (bi = 0; bi < num_bodies; bi++) {
     body_t *b = &(bodies[bi]);
-
-    /* update x component */
     b->vx = b->hvx + 0.5 * b->ax * dt;
-
-    /* update x component */
     b->vy = b->hvy + 0.5 * b->ay * dt;
   }
 
+  quadtree_free(quadtree);
   return 0;
 }
 
 /* writes the header line of the simulation state to stdout */
 static inline void write_header(state_t *state) {
-  fprintf(stdout, "%zu %zu\n", state->num_bodies, state->num_steps);
+  fprintf(state->output_file, "%zu %zu\n",
+          state->num_bodies, state->num_steps);
 }
 
 /* writes the current simulation state to stdout */
@@ -188,7 +189,7 @@ static inline void write_state(state_t *state, size_t si) {
 
   for (bi = 0; bi < state->num_bodies; bi++) {
     b = &(state->bodies[bi]);
-    fprintf(stdout, "%zu %zu %f %f %f\n",
+    fprintf(state->output_file, "%zu %zu %f %f %f\n",
             si, bi, b->m, b->x, b->y);
   }
 }
@@ -196,13 +197,14 @@ static inline void write_state(state_t *state, size_t si) {
 /* simulate the state for a number of steps */
 static int simulate(state_t *state) {
   size_t si;
+  FILE *output_file = state->output_file;
 
-  write_header(state);
+  if (output_file != NULL) write_header(state);
   for (si = 0; si < state->num_steps; si++) {
-    write_state(state, si);
+    if (output_file != NULL) write_state(state, si);
     if (step(state)) return -1;
   }
-  write_state(state, state->num_steps);
+  if (output_file != NULL) write_state(state, state->num_steps);
 
   return 0;
 }
@@ -210,13 +212,13 @@ static int simulate(state_t *state) {
 static const char *usage_msg =
   "Usage: ./gsim <thread count> <number of clusters> <number of bodies>\n"
   "              <number of simulation steps> <theta for quadtree>\n"
-  "              <random seed for initialization>\n";
+  "              <random seed for initialization> [output file]\n";
 
 int main(int argc, char **argv) {
   state_t *state;
 
   /* get command line arguments */
-  if (argc != NUM_ARGS) {
+  if (argc < MIN_ARGS || argc > MAX_ARGS) {
     fprintf(stderr, usage_msg);
     return -1;
   }
@@ -230,6 +232,8 @@ int main(int argc, char **argv) {
   state->num_steps = atoi(argv[ARG_NUM_STEPS]);
   state->theta = atof(argv[ARG_THETA]);
   srand(atoi(argv[ARG_RAND_SEED]));
+  state->output_file = argc == MAX_ARGS ? 
+    fopen(argv[ARG_OUT_FILE], "w+") : NULL;
 
   fprintf(stderr, "Running with %d threads.  Max possible is %d.\n",
                   state->thread_cnt, omp_get_max_threads());
@@ -242,5 +246,7 @@ int main(int argc, char **argv) {
   /* run simulation */
   if (simulate(state)) return -1;
 
+  free_state(state);
+  if (state->output_file != NULL) fclose(state->output_file);
   return 0;
 }

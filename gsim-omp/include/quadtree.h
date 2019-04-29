@@ -38,12 +38,20 @@ typedef struct qt {
 quadtree_t *quadtree_new(double x1, double y1,
                          double x2, double y2);
 
+/* free all of a quadtree's memory */
+void quadtree_free(quadtree_t *quadtree);
+
 /* insert a node into the quadtree */
 int quadtree_insert(quadtree_t *quadtree, body_t *b);
 
 /* post-order traversal of quadtree to compute 
  * node approximations and cumulative workloads */
 int quadtree_traverse(quadtree_t *quadtree);
+
+/* post-order traversal of the tree to get the partition
+ * of quadtree nodes for the given thread */
+int quadtree_partition(quadtree_t *quadtree,
+                       partition_t *partition, int cur_work);
 
 /* aggregate forces for a body from the quadtree */
 int quadtree_aggregate_forces(quadtree_t *quadtree, body_t *b,
