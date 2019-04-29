@@ -1,6 +1,6 @@
 IDIR=include
 CC=gcc
-CFLAGS=-g -O3 -Wall -I$(IDIR)
+CFLAGS=-g -O2 -Wall -I$(IDIR)
 OMP=-fopenmp
 
 ODIR=build

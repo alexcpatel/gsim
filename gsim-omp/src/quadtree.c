@@ -73,44 +73,15 @@ quadtree_t *quadtree_new(double x1, double y1,
   return quadtree;
 }
 
-/* helper for quadtree_free */
-static inline void _quadtree_free(quadtree_t *quadtree) {
-  if (is_leaf(quadtree)) { free(quadtree); return; }
-
-  if (quadtree != NULL) {
-    _quadtree_free(quadtree->bot_left);
-    _quadtree_free(quadtree->top_left);
-    _quadtree_free(quadtree->bot_right);
-    _quadtree_free(quadtree->top_right);
-    omp_destroy_lock(&(quadtree->node_lock));
-    free(quadtree);
-  }
-}
-
 /* free all of a quadtree's memory */
 void quadtree_free(quadtree_t *quadtree) {
   if (is_leaf(quadtree)) { free(quadtree); return; }
 
   if (quadtree != NULL) {
-    int opt;
-    #pragma omp parallel for schedule(static)
-    for (opt = 0; opt < 4; opt++) {
-      switch (opt) {
-        case 0:
-          _quadtree_free(quadtree->bot_left);
-          break;
-        case 1:
-          _quadtree_free(quadtree->top_left);
-          break;
-        case 2:
-          _quadtree_free(quadtree->bot_right);
-          break;
-        case 3:
-        default:
-          _quadtree_free(quadtree->top_right);
-          break;
-      }
-    }
+    quadtree_free(quadtree->bot_left);
+    quadtree_free(quadtree->top_left);
+    quadtree_free(quadtree->bot_right);
+    quadtree_free(quadtree->top_right);
     omp_destroy_lock(&(quadtree->node_lock));
     free(quadtree);
   }
@@ -194,28 +165,6 @@ static inline void combine_work_mass(quadtree_t *quadtree) {
   quadtree->m = m;
 }
 
-/* helper function for quadtree traverse for parallelism */
-static inline void _quadtree_traverse(quadtree_t *quadtree) {
-  if (quadtree == NULL) return;
-  if (is_leaf(quadtree)) {
-    body_t *b = quadtree->body;
-    if (b != NULL) {
-      quadtree->work = b->work;
-      quadtree->m  = b->m;
-      quadtree->xc = b->x;
-      quadtree->yc = b->y;
-    }
-    return;
-  }  
-
-  _quadtree_traverse(quadtree->bot_left);
-  _quadtree_traverse(quadtree->top_left);
-  _quadtree_traverse(quadtree->bot_right);
-  _quadtree_traverse(quadtree->top_right);
-
-  combine_work_mass(quadtree);
-}
-
 /* post-order traversal of quadtree to compute 
  * node approximations and cumulative workloads */
 void quadtree_traverse(quadtree_t *quadtree) {
@@ -231,25 +180,10 @@ void quadtree_traverse(quadtree_t *quadtree) {
     return;
   } 
 
-  int opt;
-  #pragma omp parallel for schedule(static)
-  for (opt = 0; opt < 4; opt++) {
-    switch (opt) {
-      case 0:
-        _quadtree_traverse(quadtree->bot_left);
-        break;
-      case 1:
-        _quadtree_traverse(quadtree->top_left);
-        break;
-      case 2:
-        _quadtree_traverse(quadtree->bot_right);
-        break;
-      case 3:
-      default:
-        _quadtree_traverse(quadtree->top_right);
-        break;
-    }
-  }
+  quadtree_traverse(quadtree->bot_left);
+  quadtree_traverse(quadtree->top_left);
+  quadtree_traverse(quadtree->bot_right);
+  quadtree_traverse(quadtree->top_right);
 
   combine_work_mass(quadtree);
 }
@@ -260,8 +194,7 @@ void quadtree_partition(quadtree_t *quadtree,
                         partition_t *partition, int cur_work) {
   if (is_leaf(quadtree)) {
     body_t *b = quadtree->body;
-    if (b != NULL && 
-        partition->min_work <= cur_work) {
+    if (b != NULL && partition->min_work <= cur_work) {
       partition->pbodies[partition->num_pbodies++] = b;
     }
     return;
@@ -315,7 +248,9 @@ void quadtree_aggregate_forces(quadtree_t *quadtree, body_t *b,
     denom = (denom * denom2) / denom2;
     mult = quadtree->m / denom;
 
+    #pragma omp atomic
     b->ax += mult * dx;
+    #pragma omp atomic
     b->ay += mult * dy;
 
     return;
@@ -333,7 +268,9 @@ void quadtree_aggregate_forces(quadtree_t *quadtree, body_t *b,
     denom = (denom * denom2) / denom2;
     mult = ob->m / denom;
 
+    #pragma omp atomic
     b->ax += mult * dx;
+    #pragma omp atomic
     b->ay += mult * dy;
   }
 

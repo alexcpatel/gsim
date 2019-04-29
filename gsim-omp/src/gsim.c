@@ -220,6 +220,7 @@ static void simulate(state_t *state) {
 
   if (has_output_file) write_header(state);
   for (si = 0; si < state->num_steps; si++) {
+    //fprintf(stderr, "si: %zu\n", si);
     if (has_output_file) write_state(state, si);
     step(state);
   }
@@ -265,12 +266,15 @@ int main(int argc, char **argv) {
   FINISH_ACTIVITY(SETUP);
 
   /* run simulation */
+  double start = currentSeconds();
   simulate(state);
+  double time = currentSeconds() - start;
+  fprintf(stderr, "SIMULATION TOTAL TIME: %.2f ms\n", time * 1000.0);
 
   /* free and close resources */
   START_ACTIVITY(OTHER);
-  free_state(state);
   if (state->output_file != NULL) fclose(state->output_file);
+  free_state(state);
   FINISH_ACTIVITY(OTHER);
 
   /* print monitor information */

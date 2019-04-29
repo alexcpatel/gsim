@@ -37,7 +37,7 @@ typedef enum {
   ARG_OUT_FILE
 } arg_index_t;
 
-/* body struct definition */
+/* body struct definition (128 bytes) */
 typedef struct bt {
   double m;  // mass of the body
 
@@ -54,17 +54,21 @@ typedef struct bt {
   double ay; // acceleration in y direction
 
   int work;
+
+  char pad[52]; // 128 - 76
 } body_t;
 
-/* partitions of bodies between threads */
+/* partitions of bodies between threads (64 bytes) */
 typedef struct pt {
   size_t num_pbodies;
   body_t **pbodies;
   int min_work;
   int max_work;
+
+  char pad[40]; // 64 - 76
 } partition_t;
 
-/* simulation state struct definition */
+/* simulation state struct definition (64 bytes) */
 typedef struct {
   FILE *output_file; // output file for visualizer
   int thread_cnt; // number of openmp threads
