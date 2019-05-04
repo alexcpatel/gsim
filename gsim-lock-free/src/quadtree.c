@@ -1,29 +1,18 @@
 #include "quadtree.h"
 
-/* check if a position is in the bounding box of the quadtree*/
-static inline bool in_boundary(quadtree_t *quadtree,
-                               double x, double y) {
-  return quadtree != NULL &&
-         x >= quadtree->x1 &&
-         x <= quadtree->x2 &&
-         y >= quadtree->y1 &&
-         y <= quadtree->y2;
+/* convert a body int to a pointer */
+static inline body_t *int_to_body(uintptr_t body) {
+  return (body_t *) (body & ~(uintptr_t) 0x1);
 }
 
-/* check if the quadtree is a leaf (has no subtrees) */
-static inline bool is_leaf(quadtree_t *quadtree) {
-  return quadtree != NULL &&
-         quadtree->bot_left == NULL &&
-         quadtree->top_left == NULL &&
-         quadtree->bot_right == NULL &&
-         quadtree->top_right == NULL;
+/* convert a body pointer to an int */
+static inline uintptr_t body_to_int(body_t *b) {
+  return (uintptr_t) b | (uintptr_t) 0x1;
 }
 
 /* get the next subtree for the position */
 static inline quadtree_t *get_subtree(quadtree_t *quadtree,
                                       double x, double y) {
-
-  /* choose the next subtree */
   if (x < quadtree->xm) {
     if (y < quadtree->ym) return quadtree->bot_left;
     else return quadtree->top_left;
@@ -31,7 +20,6 @@ static inline quadtree_t *get_subtree(quadtree_t *quadtree,
     if (y < quadtree->ym) return quadtree->bot_right;
     else return quadtree->top_right;
   }
-
   return NULL;
 }
 
@@ -39,10 +27,10 @@ static inline quadtree_t *get_subtree(quadtree_t *quadtree,
 quadtree_t *quadtree_new(double x1, double y1, 
                          double x2, double y2) {
   quadtree_t *quadtree = calloc(1, sizeof(quadtree_t));
-  if (quadtree == NULL) return NULL;
+  if (!quadtree) return NULL;
 
-  /* initialize lock for node */
-  omp_init_lock(&(quadtree->node_lock));
+  /* initialize body at quadtree */
+  quadtree->body = 0x1; // is leaf node, NULL body
 
   /* set quadtree bounding box */
   quadtree->x1 = x1;
@@ -55,37 +43,30 @@ quadtree_t *quadtree_new(double x1, double y1,
   quadtree->xm = 0.5 * (x1 + x2);
   quadtree->ym = 0.5 * (y1 + y2);
 
-  /* set quadtree cumulative mass and center of mass */
-  quadtree->work = 0;
-  quadtree->m  = 0.0;
-  quadtree->xc = 0.0;
-  quadtree->yc = 0.0;
-
-  /* initialize body at quadtree */
-  quadtree->body = NULL;
-  quadtree->bm = 0.0;
-  quadtree->bx = 0.0;
-  quadtree->by = 0.0;
-
   /* set quadtree subtrees */
   quadtree->top_left  = NULL;
   quadtree->top_right = NULL;
   quadtree->bot_left  = NULL;
   quadtree->bot_right = NULL;
 
+  /* set accumulated quadtree info */
+  quadtree->m  = 0.0;
+  quadtree->xc = 0.0;
+  quadtree->yc = 0.0;
+  quadtree->work = 0;
+
   return quadtree;
 }
 
 /* free all of a quadtree's memory */
 void quadtree_free(quadtree_t *quadtree) {
-  if (is_leaf(quadtree)) { free(quadtree); return; }
-
-  if (quadtree != NULL) {
-    quadtree_free(quadtree->bot_left);
-    quadtree_free(quadtree->top_left);
-    quadtree_free(quadtree->bot_right);
-    quadtree_free(quadtree->top_right);
-    omp_destroy_lock(&(quadtree->node_lock));
+  if (quadtree) {
+    if (!(quadtree->body & (uintptr_t) 0x1)) {
+      quadtree_free(quadtree->bot_left);
+      quadtree_free(quadtree->top_left);
+      quadtree_free(quadtree->bot_right);
+      quadtree_free(quadtree->top_right);
+    }
     free(quadtree);
   }
 }
@@ -95,23 +76,26 @@ void quadtree_insert(quadtree_t *quadtree, body_t *b) {
   double x = b->x, y = b->y;
 
   /* check if body is in the quadtree */
-  if (!in_boundary(quadtree, x, y)) return;
+  if (quadtree == NULL ||
+      x < quadtree->x1 ||
+      x > quadtree->x2 ||
+      y < quadtree->y1 ||
+      y > quadtree->y2) return;
+  
+  /* if this leaf is empty, insert immediately */
+  while (quadtree->body == (uintptr_t) 0x1) {
+    uintptr_t nib = body_to_int(b);
+    if (__sync_bool_compare_and_swap(&(quadtree->body), 
+        (uintptr_t) 0x1, nib)) return;
+  }
 
-  /* attempt to insert body at leaf */
-  omp_set_lock(&(quadtree->node_lock));
-  if (is_leaf(quadtree)) {
-    
-    /* immediately insert if quadtree has no tree */
-    if (quadtree->body == NULL) {
-      quadtree->body = b;
-      omp_unset_lock(&(quadtree->node_lock));
-      return;  
-    } 
-  
-    /* there is a collision, we must allocate subtrees */
-    double x1, y1, x2, y2, xm, ym, ox, oy;
-    body_t *ob;
-  
+  /* if there is a collision, allocate subtrees */
+  uintptr_t oib;
+  while ((oib = quadtree->body)   &&
+         (oib & ~(uintptr_t) 0x1) &&
+          oib &  (uintptr_t) 0x1) {
+    double x1, y1, x2, y2, xm, ym;
+
     /* get node values and remove node from tree */
     x1 = quadtree->x1;
     y1 = quadtree->y1;
@@ -119,29 +103,66 @@ void quadtree_insert(quadtree_t *quadtree, body_t *b) {
     y2 = quadtree->y2;
     xm = quadtree->xm;
     ym = quadtree->ym;
-    ob = quadtree->body;
-    quadtree->body = NULL;
-    ox = ob->x;
-    oy = ob->y;
-  
-    /* initialize subtrees */
-    quadtree->bot_left  = quadtree_new(x1, y1, xm, ym);
-    quadtree->top_left  = quadtree_new(x1, ym, xm, y2);
-    quadtree->bot_right = quadtree_new(xm, y1, x2, ym);
-    quadtree->top_right = quadtree_new(xm, ym, x2, y2);
-  
-    omp_unset_lock(&(quadtree->node_lock));
 
-    /* re-insert removed node into subtree */
-    quadtree_t *q1 = get_subtree(quadtree, ox, oy);
-    if (q1 == NULL) return;
-    quadtree_insert(q1, ob);
-  } else omp_unset_lock(&(quadtree->node_lock));
+    /* initialize subtrees */
+    if (!quadtree->bot_left) {
+      quadtree_t *bot_left = quadtree_new(x1, y1, xm, ym);
+      while (1) {
+        if (__sync_bool_compare_and_swap(&(quadtree->bot_left), 
+            NULL, bot_left)) break;
+        if (quadtree->bot_left) {
+          free(bot_left);
+          break;
+        }
+      }
+    }
+
+    if (!quadtree->top_left) {
+      quadtree_t *top_left = quadtree_new(x1, ym, xm, y2);
+      while (1) {
+        if (__sync_bool_compare_and_swap(&(quadtree->top_left), 
+            NULL, top_left)) break;
+        if (quadtree->top_left) {
+          free(top_left);
+          break;
+        }
+      }
+    }
+
+    if (!quadtree->bot_right) {
+      quadtree_t *bot_right = quadtree_new(xm, y1, x2, ym);
+      while (1) {
+        if (__sync_bool_compare_and_swap(&(quadtree->bot_right), 
+            NULL, bot_right)) break;
+        if (quadtree->bot_right) {
+          free(bot_right);
+          break;
+        }
+      }
+    }
+
+    if (!quadtree->top_right) {
+      quadtree_t *top_right = quadtree_new(xm, ym, x2, y2);
+      while (1) {
+        if (__sync_bool_compare_and_swap(&(quadtree->top_right), 
+            NULL, top_right)) break;
+        if (quadtree->top_right) {
+          free(top_right);
+          break;
+        }
+      }
+    }
+
+    /* get body to re-insert */
+    body_t *ob = int_to_body(oib);
+    if (__sync_bool_compare_and_swap(&(quadtree->body), 
+        oib, (uintptr_t) 0x0)) {
+      quadtree_insert(get_subtree(quadtree, ob->x, ob->y), ob);
+    }
+  }
 
   /* insert node into subtree */
-  quadtree_t *q2 = get_subtree(quadtree, x, y);
-  if (q2 == NULL) return;
-  quadtree_insert(q2, b);
+  quadtree_insert(get_subtree(quadtree, x, y), b);
 }
 
 /* helper function for quadtree_traverse with updating work */
@@ -171,19 +192,14 @@ static inline void combine_work_mass(quadtree_t *quadtree) {
 /* post-order traversal of quadtree to compute 
  * node approximations and cumulative workloads */
 void quadtree_traverse(quadtree_t *quadtree) {
-  if (quadtree == NULL) return;
-  if (is_leaf(quadtree)) {
-    body_t *b = quadtree->body;
-    if (b != NULL) {
-      quadtree->work = b->work;
-
-      quadtree->bm = b->m;
-      quadtree->bx = b->x;
-      quadtree->by = b->y;
-
+  if (!quadtree) return;
+  if (quadtree->body & (uintptr_t) 0x1) {
+    body_t *b = int_to_body(quadtree->body);
+    if (b) {
       quadtree->m  = b->m;
       quadtree->xc = b->x;
       quadtree->yc = b->y;
+      quadtree->work = b->work;
     }
     return;
   } 
@@ -200,17 +216,17 @@ void quadtree_traverse(quadtree_t *quadtree) {
  * of quadtree nodes for the given thread */
 void quadtree_partition(quadtree_t *quadtree,
                         partition_t *partition, int cur_work) {
-  if (is_leaf(quadtree)) {
-    body_t *b = quadtree->body;
-    if (b != NULL && partition->min_work <= cur_work) {
+  if (quadtree->body & (uintptr_t) 0x1) {
+    body_t *b = int_to_body(quadtree->body);
+    if (b && partition->min_work <= cur_work) {
       partition->pbodies[partition->num_pbodies++] = b;
     }
     return;
   }
 
-  int min_work = partition->min_work,
-      max_work = partition->max_work,
-      next_work = 0;
+  uint32_t min_work = partition->min_work,
+           max_work = partition->max_work,
+           next_work = 0;
 
   next_work = cur_work + quadtree->bot_left->work;
   if (min_work < next_work)
@@ -248,8 +264,7 @@ void quadtree_aggregate_forces(quadtree_t *quadtree, body_t *b,
 
   /* add subtree contribution */
   if (quadtree->l/dmag < theta) {
-    double denom = dmag*dmag + epsilon2;
-    double mult = quadtree->m / sqrt(denom * denom * denom);
+    double mult = quadtree->m / (dmag*dmag + epsilon2);
 
     b->ax += mult * dx;
     b->ay += mult * dy;
@@ -257,24 +272,24 @@ void quadtree_aggregate_forces(quadtree_t *quadtree, body_t *b,
   }
 
   /* add node contribution */
-  if (quadtree->body != NULL) {
-    dx = quadtree->bx - x;
-    dy = quadtree->by - y;
+  body_t *ob = int_to_body(quadtree->body);
+  if (ob) {
+    dx = ob->x - x;
+    dy = ob->y - y;
     dmag = sqrt(dx*dx + dy*dy);
 
-    double denom = dmag*dmag + epsilon2;
-    double mult = quadtree->bm / sqrt(denom * denom * denom);
+    double mult = ob->m / (dmag*dmag + epsilon2);
 
     b->ax += mult * dx;
     b->ay += mult * dy;
   }
 
   /* if we are at a leaf, stop aggregating forces */
-  if (is_leaf(quadtree)) return;
+  if (quadtree->body & (uintptr_t) 0x1) return;
 
   /* recurse to aggregate subtrees */
-  quadtree_aggregate_forces(quadtree->bot_left, b, theta, epsilon2);
-  quadtree_aggregate_forces(quadtree->top_left, b, theta, epsilon2);
+  quadtree_aggregate_forces(quadtree->bot_left,  b, theta, epsilon2);
+  quadtree_aggregate_forces(quadtree->top_left,  b, theta, epsilon2);
   quadtree_aggregate_forces(quadtree->bot_right, b, theta, epsilon2);
   quadtree_aggregate_forces(quadtree->top_right, b, theta, epsilon2);
 }

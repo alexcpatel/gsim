@@ -4,8 +4,8 @@
 #include "gsim.h"
 
 typedef struct qt {
-  /* open mp lock */
-  omp_lock_t node_lock;
+  /* body */
+  uintptr_t body; // body attached to leaf node
 
   /* tree bounding box */
   double x1; // left of bbox
@@ -18,23 +18,18 @@ typedef struct qt {
   double xm; // center of bbox
   double ym; // center of bbox
 
-  /* accumulated tree info */
-  int work;
-  double m; // total mass of sub nodes
-  double xc; // x center of mass
-  double yc; // y center of mass
-
-  /* leaf body */
-  body_t *body;
-  double bm;
-  double bx;
-  double by;
-
   /* subtrees */
   struct qt *top_left;
   struct qt *top_right;
   struct qt *bot_left;
   struct qt *bot_right;
+
+  /* accumulated tree info */
+  double m; // total mass of sub nodes
+  double xc; // x center of mass
+  double yc; // y center of mass
+  uint64_t work; // total work of bodies in the tree
+
 } quadtree_t;
 
 /* create a new quadtree */
