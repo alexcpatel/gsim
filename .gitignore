@@ -3,3 +3,4 @@ gsim-bad/gsim-bad
 gsim-seq/gsim-seq
 gsim-omp/gsim-omp
 gsim-lock-free/gsim-lock-free
+traces
