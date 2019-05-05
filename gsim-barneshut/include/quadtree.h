@@ -3,6 +3,7 @@
 
 #include "gsim.h"
 
+/* quadtree structure definition (192 bytes) */
 typedef struct qt {
   /* open mp lock */
   omp_lock_t node_lock;
@@ -35,6 +36,8 @@ typedef struct qt {
   struct qt *top_right;
   struct qt *bot_left;
   struct qt *bot_right;
+
+  char pad[32];
 } quadtree_t;
 
 /* create a new quadtree */

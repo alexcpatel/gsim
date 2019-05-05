@@ -3,7 +3,7 @@
 
 /* free all state memory */
 static inline void free_state(state_t *state) {
-  if (state != NULL) {
+  if (state) {
     free(state->bodies);
     int pi;
     partition_t *partitions = state->partitions;
@@ -29,7 +29,7 @@ static int setup(state_t *state) {
 
   /* allocate memory for bodies */
   state->bodies = calloc(num_bodies, sizeof(body_t));
-  if (state->bodies == NULL) return -1;
+  if (!state->bodies) return -1;
   bodies = state->bodies;
 
   /* distribute random bodies by cluster */
@@ -68,7 +68,7 @@ static int setup(state_t *state) {
   /* allocate space for partitions */
   thread_cnt = state->thread_cnt;
   state->partitions = calloc(thread_cnt, sizeof(partition_t));
-  if (state->partitions == NULL) return -1;
+  if (!state->partitions) return -1;
   partitions = state->partitions;
 
   #pragma omp parallel for schedule(static)
@@ -88,7 +88,7 @@ static inline void step(state_t *state) {
   body_t *bodies = state->bodies;
   partition_t *partitions = state->partitions;
   quadtree_t *quadtree;
-  int W, Wp;
+  uint64_t W, Wp;
 
   /* constant definitions for step loop */
   static const double epsilon2 =
@@ -215,7 +215,7 @@ static inline void write_state(state_t *state, size_t si) {
 /* simulate the state for a number of steps */
 static void simulate(state_t *state) {
   size_t si;
-  bool has_output_file = state->output_file != NULL;
+  bool has_output_file = !!state->output_file;
 
   if (has_output_file) write_header(state);
   for (si = 0; si < state->num_steps; si++) {
@@ -240,9 +240,7 @@ int main(int argc, char **argv) {
     return -1;
   }
 
-  state = calloc(1, sizeof(state_t));
-  if (state == NULL) return -1;
-
+  if (!(state = calloc(1, sizeof(state_t)))) return -1;
   state->thread_cnt = atoi(argv[ARG_THREAD_CNT]);
   state->num_clusters = atoi(argv[ARG_NUM_CLUSTERS]);
   state->num_bodies = atoi(argv[ARG_NUM_BODIES]);
@@ -252,7 +250,7 @@ int main(int argc, char **argv) {
   state->output_file = argc == MAX_ARGS ? 
     fopen(argv[ARG_OUT_FILE], "w+") : NULL;
 
-  fprintf(stderr, "Running with %d %s. Max possible is %d.\n",
+  fprintf(stdout, "Running with %d %s. Max possible is %d.\n",
                   state->thread_cnt,
                   state->thread_cnt == 1 ? "thread" : "threads",
                   omp_get_max_threads());
@@ -270,7 +268,7 @@ int main(int argc, char **argv) {
 
   /* free and close resources */
   START_ACTIVITY(WRITE_FILE);
-  if (state->output_file != NULL) fclose(state->output_file);
+  if (state->output_file) fclose(state->output_file);
   FINISH_ACTIVITY(WRITE_FILE);
 
   START_ACTIVITY(OTHER);

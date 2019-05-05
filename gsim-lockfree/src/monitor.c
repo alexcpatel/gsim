@@ -37,12 +37,14 @@ void print_activities(void) {
   for (act = 0; act < NUM_ACT; act++)
     total_time += act_times[act];
 
-  fprintf(stderr, "\ttotal time: %.2lf ms\n", total_time * 1000);
-  fprintf(stderr, "\t---------------------------\n");
+  fprintf(stdout, "\n\ttotal time: %.2lf ms\n", total_time * 1000);
+  fprintf(stdout, "\t--------------------------------------------------\n");
 
   for (act = 0; act < NUM_ACT; act++)
-    fprintf(stderr, "\t%.2lf ms \t%.2lf %%    \t%s\n",
+    fprintf(stdout, "\t%.2lf ms \t%.2lf %%    \t%s\n",
       act_times[act] * 1000,
       (act_times[act] * 100) / total_time,
       act_names[act]);
+
+  fprintf(stdout, "\n");
 }

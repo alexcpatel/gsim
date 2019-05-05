@@ -1,5 +1,3 @@
-//https://developer.download.nvidia.com/compute/cuda/1.1-Beta/x86_website/projects/nbody/doc/nbody_gems3_ch31.pdf
-
 #ifndef _GSIM_H_
 #define _GSIM_H_
 
@@ -54,31 +52,30 @@ typedef struct bt {
   double ax; // acceleration in x direction
   double ay; // acceleration in y direction
 
-  int work;
-
-  char pad[52]; // 128 - 76
+  int work; // estimated work of the body
+  char pad[52];
 } body_t;
 
 /* partitions of bodies between threads (64 bytes) */
 typedef struct pt {
-  size_t num_pbodies;
   body_t **pbodies;
+  size_t num_pbodies;
   int min_work;
   int max_work;
-
-  char pad[40]; // 64 - 76
+  char pad[40];
 } partition_t;
 
 /* simulation state struct definition (64 bytes) */
 typedef struct {
   FILE *output_file; // output file for visualizer
-  int thread_cnt; // number of openmp threads
+  body_t *bodies; // array of all the data for every body
+  partition_t *partitions; // array of body partitions for each threads
+  double theta; // theta for quadtree heuristic
   size_t num_clusters; // number of local clusters to divide bodies into
   size_t num_bodies; // total number of bodies
   size_t num_steps; // total number of simulation steps
-  double theta; // theta for quadtree heuristic
-  body_t *bodies; // array of all the data for every body
-  partition_t *partitions; // array of body partitions for each threads
+  int thread_cnt; // number of openmp threads
+  char pad[4];
 } state_t;
 
 #endif

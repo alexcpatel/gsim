@@ -1,6 +1,6 @@
 IDIR=include
 CC=gcc
-CFLAGS=-g -O2 -Wall -I$(IDIR)
+CFLAGS=-Wall -I$(IDIR)
 OMP=-fopenmp
 
 ODIR=build
@@ -14,15 +14,15 @@ DEPS = $(patsubst %,$(IDIR)/%,$(_DEPS))
 _OBJ = gsim.o quadtree.o monitor.o cycletimer.o
 OBJ = $(patsubst %,$(ODIR)/%,$(_OBJ))
 
-BINS = gsim-lock-free
+BINS = gsim-lockfree
 
 $(ODIR)/%.o: $(SDIR)/%.c $(DEPS) | build_dir
 	$(CC) $(OMP) -c -o $@ $< $(CFLAGS) $(LIBS)
 
 default: all
-all: clean gsim-lock-free
+all: clean gsim-lockfree
 
-gsim-lock-free: $(OBJ)
+gsim-lockfree: $(OBJ)
 	$(CC) $(OMP) -o $@ $^ $(CFLAGS) $(LIBS)
 
 .PHONY: build_dir

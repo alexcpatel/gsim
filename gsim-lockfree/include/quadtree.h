@@ -3,6 +3,7 @@
 
 #include "gsim.h"
 
+/* quadtree structure definition (128 bytes) */
 typedef struct qt {
   /* body */
   uintptr_t body; // body attached to leaf node

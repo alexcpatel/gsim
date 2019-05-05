@@ -248,8 +248,7 @@ void quadtree_aggregate_forces(quadtree_t *quadtree, body_t *b,
 
   /* add subtree contribution */
   if (quadtree->l/dmag < theta) {
-    double denom = dmag*dmag + epsilon2;
-    double mult = quadtree->m / sqrt(denom * denom * denom);
+    double mult = quadtree->m / (dmag*dmag + epsilon2);
 
     b->ax += mult * dx;
     b->ay += mult * dy;
@@ -262,8 +261,7 @@ void quadtree_aggregate_forces(quadtree_t *quadtree, body_t *b,
     dy = quadtree->by - y;
     dmag = sqrt(dx*dx + dy*dy);
 
-    double denom = dmag*dmag + epsilon2;
-    double mult = quadtree->bm / sqrt(denom * denom * denom);
+    double mult = quadtree->bm / (dmag*dmag + epsilon2);
 
     b->ax += mult * dx;
     b->ay += mult * dy;

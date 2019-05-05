@@ -101,7 +101,7 @@ static inline void step(state_t *state) {
 
   /* update positions of each body */
   START_ACTIVITY(UPDATE_POSITIONS);
-  //#pragma omp parallel for schedule(static)
+  #pragma omp parallel for schedule(static)
   for (bi = 0; bi < num_bodies; bi++) {
     body_t *b = &(bodies[bi]);
     b->hvx = b->vx + 0.5 * b->ax * dt;
@@ -257,14 +257,6 @@ int main(int argc, char **argv) {
 
   omp_set_num_threads(state->thread_cnt);
   FINISH_ACTIVITY(OTHER);
-
-  // quadtree_t *test = quadtree_new(0.0,0.0,0.0,0.0);
-  // test->is_leaf = 0x7;
-  // test->has_body = 0x2;
-  // fprintf(stdout, "%u, %u\n", (unsigned int) test->is_leaf, (unsigned int) test->has_body);
-  // fprintf(stdout, "%x\n", (unsigned int) *((uint32_t *) &(test->is_leaf)));
-  // quadtree_free(test);
-  // exit(0);
 
   /* initialize simulation state */
   START_ACTIVITY(SETUP);
