@@ -164,8 +164,9 @@ static void simulate(state_t *state) {
 }
 
 static const char *usage_msg =
-  "Usage: ./gsim <thread count> <number of clusters> <number of bodies>\n"
-  "              <number of simulation steps> <random seed for initialization> [output file]\n";
+  "Usage: ./gsim-bad <thread count> <number of clusters> <number of bodies>\n"
+  "                  <number of simulation steps> <random seed for initialization>\n"
+  "                  [output file]\n";
 
 int main(int argc, char **argv) {
   state_t *state;
