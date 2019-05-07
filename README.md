@@ -11,6 +11,12 @@ The above project directories have a Makefile (run `make` in the project directo
 
 The `gviz` directory contains a program to accept an output file from either of the two versions of the implementation and display a visualization. This directory also contains a Makefile, and the visualizer requires `glfw3` installed on your system.
 
+## Report
+
+An in-depth report describing an overview of the problem domain, our implementation-specific details for the algorithm, and our analysis of benchmark and profiling results can be found in `report.pdf`.
+
+This project is our final project for the course 15-418/618 Parallel Computer Architecture and Programming Spring 2019 at Carnegie Mellon University. At the culmination of the project, we presented a poster illustrating key successes and takeaways. This poster can be found in `gsim-poster.png`.
+
 ## Benchmarking
 
 The benchmarking script `benchmark.py` runs all of our implementations on varying parameters and writes the results into an output file. The benchmark also writes trace results for each run performed.
