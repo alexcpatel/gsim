@@ -32,6 +32,6 @@ The benchmark script supports the following optional flags:
  * `-t`: Maximum number of threads to perform runs up to (machine dependent) (default: `16`)
  * `-b`: Total number of simulation bodies for each run (default: `1000`)
  * `-s`: Total number of simulation steps for each run (default: `100`)
- * `-r`: Number of runs we take the best result from for each benchmark
+ * `-r`: Number of runs we take the best result from for each benchmark (default: `4`)
  * `-f`: Path to directory traces should be written to (default: `./traces`)
  * `-o`: Output file of benchmark results (default: `./benchmark.txt`)
